@@ -1,5 +1,9 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Disclaimer
+
+This project makes use of AI agents and was created using vibe coding.
+
 ## Getting Started
 
 First, run the development server:
