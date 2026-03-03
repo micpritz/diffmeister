@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import * as Diff from 'diff';
-import { Copy, Trash2, Github, Check, Zap, Layers } from 'lucide-react';
+import { Copy, Trash2, Github, Check, Zap, Layers, Maximize2, Minimize2 } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -186,13 +186,33 @@ Button.displayName = 'Button';
 
 const Textarea = React.forwardRef<
     HTMLTextAreaElement,
-    React.TextareaHTMLAttributes<HTMLTextAreaElement> & { label: string }
->(({ className, label, ...props }, ref) => (
+    React.TextareaHTMLAttributes<HTMLTextAreaElement> & {
+        label: string;
+        isMaximized?: boolean;
+        onToggleMaximize?: () => void;
+    }
+>(({ className, label, isMaximized = false, onToggleMaximize, ...props }, ref) => (
     <div className='space-y-2 flex-1'>
-        <label className='text-[10px] font-bold uppercase tracking-widest text-slate-400'>{label}</label>
+        <div className='flex items-center justify-between gap-2'>
+            <label className='text-[10px] font-bold uppercase tracking-widest text-slate-400'>{label}</label>
+            {onToggleMaximize ? (
+                <Button variant='outline' size='sm' onClick={onToggleMaximize} className='cursor-pointer'>
+                    {isMaximized ? (
+                        <>
+                            <Minimize2 className='h-3.5 w-3.5 mr-2' /> Minimize
+                        </>
+                    ) : (
+                        <>
+                            <Maximize2 className='h-3.5 w-3.5 mr-2' /> Maximize
+                        </>
+                    )}
+                </Button>
+            ) : null}
+        </div>
         <textarea
             className={cn(
-                'flex min-h-[240px] w-full border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs shadow-sm placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-950 font-mono transition-all focus:bg-white',
+                'flex w-full border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs shadow-sm placeholder:text-slate-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-950 font-mono transition-all focus:bg-white',
+                isMaximized ? 'min-h-[calc(100vh-12rem)]' : 'min-h-[240px]',
                 className,
             )}
             ref={ref}
@@ -202,6 +222,8 @@ const Textarea = React.forwardRef<
 ));
 Textarea.displayName = 'Textarea';
 
+type FieldKey = 'original' | 'modified' | 'canvas';
+
 // --- Main App ---
 
 export default function DiffMeisterSync() {
@@ -210,6 +232,7 @@ export default function DiffMeisterSync() {
     const [isHydrated, setIsHydrated] = useState(false);
     const [copied, setCopied] = useState(false);
     const [isCanvasFocused, setIsCanvasFocused] = useState(false);
+    const [maximizedField, setMaximizedField] = useState<FieldKey | null>(null);
 
     const canvasRef = useRef<HTMLDivElement>(null);
     const isSyncing = useRef(false);
@@ -455,122 +478,174 @@ export default function DiffMeisterSync() {
         setTimeout(() => setCopied(false), 2000);
     };
 
+    const toggleMaximizedField = (field: FieldKey) => {
+        setMaximizedField((current) => (current === field ? null : field));
+    };
+
     if (!isHydrated) return null;
+
+    const isAnyFieldMaximized = maximizedField !== null;
+    const showOriginal = !isAnyFieldMaximized || maximizedField === 'original';
+    const showModified = !isAnyFieldMaximized || maximizedField === 'modified';
+    const showCanvas = !isAnyFieldMaximized || maximizedField === 'canvas';
 
     return (
         <div className='min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-blue-100'>
-            <div className='max-w-5xl mx-auto p-6 md:p-12 space-y-8'>
+            <div className={cn('max-w-5xl mx-auto p-6 md:p-12', isAnyFieldMaximized ? 'space-y-6' : 'space-y-8')}>
                 {/* Header */}
-                <div className='flex flex-col md:flex-row md:items-center justify-between gap-4'>
-                    <div className='space-y-1'>
-                        <h1 className='text-2xl font-bold tracking-tighter flex items-center gap-2'>
-                            <Layers className='h-6 w-6 text-blue-600' />
-                            DiffMeister
-                            <span className='text-slate-300 line-through decoration-slate-400 opacity-50'>Plus</span>
-                            <span className='text-slate-300 line-through decoration-slate-400 opacity-50'>Pro</span>
-                            <span className='text-blue-600 font-black'>Ultra</span>
-                        </h1>
-                        <p className='text-xs font-medium text-slate-400 uppercase tracking-widest flex items-center gap-2'>
-                            <span className='bg-slate-200/50 px-1.5 py-0.5 rounded text-[9px] font-bold'>
-                                v0.1.0 Alpha
-                            </span>
-                        </p>
-                    </div>
-                    <div className='flex items-center gap-2'>
-                        <Button
-                            variant='outline'
-                            size='sm'
-                            onClick={() => {
-                                setOriginal('');
-                                setModified('');
-                            }}
-                            className='cursor-pointer'
-                        >
-                            <Trash2 className='h-3.5 w-3.5 mr-2' /> Reset
-                        </Button>
-                        <Button
-                            variant='default'
-                            size='sm'
-                            onClick={copyResult}
-                            className={cn(
-                                'transition-all duration-200 cursor-pointer',
-                                copied ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700',
-                            )}
-                        >
-                            {copied ? (
-                                <>
-                                    <Check className='h-3.5 w-3.5 mr-2 animate-in zoom-in duration-300' /> Copied!
-                                </>
-                            ) : (
-                                <>
-                                    <Copy className='h-3.5 w-3.5 mr-2' /> Copy Final
-                                </>
-                            )}
-                        </Button>
-                    </div>
-                </div>
-
-                {/* Source Fields (Secondary Interface) */}
-                <div className='grid md:grid-cols-2 gap-6'>
-                    <Textarea
-                        label='Original Source (A)'
-                        value={original}
-                        onChange={(e) => setOriginal(e.target.value)}
-                    />
-                    <Textarea
-                        label='Modified Version (B)'
-                        value={modified}
-                        onChange={(e) => setModified(e.target.value)}
-                    />
-                </div>
-
-                {/* The Live Canvas (Primary Interface) */}
-                <div className='space-y-3'>
-                    <div className='flex items-center justify-between'>
-                        <h2 className='text-sm font-bold flex items-center gap-2'>
-                            <Zap className='h-4 w-4 text-amber-500 fill-amber-500' />
-                            Live Synchronized Canvas
-                        </h2>
-                        <div className='flex gap-4 text-[10px] font-bold uppercase tracking-tighter text-slate-400'>
-                            <span className='flex items-center gap-1'>
-                                <span className='w-2 h-2 rounded-full bg-red-400' /> Original A (Read-Only from Canvas)
-                            </span>
-                            <span className='flex items-center gap-1'>
-                                <span className='w-2 h-2 rounded-full bg-green-400' /> Edits Modified B
-                            </span>
-                            <span className='flex items-center gap-1'>
-                                <span className='w-2 h-2 rounded-full bg-slate-300' /> All Canvas Edits to Modified B
-                            </span>
+                {!isAnyFieldMaximized ? (
+                    <div className='flex flex-col md:flex-row md:items-center justify-between gap-4'>
+                        <div className='space-y-1'>
+                            <h1 className='text-2xl font-bold tracking-tighter flex items-center gap-2'>
+                                <Layers className='h-6 w-6 text-blue-600' />
+                                DiffMeister
+                                <span className='text-slate-300 line-through decoration-slate-400 opacity-50'>
+                                    Plus
+                                </span>
+                                <span className='text-slate-300 line-through decoration-slate-400 opacity-50'>Pro</span>
+                                <span className='text-blue-600 font-black'>Ultra</span>
+                            </h1>
+                            <p className='text-xs font-medium text-slate-400 uppercase tracking-widest flex items-center gap-2'>
+                                <span className='bg-slate-200/50 px-1.5 py-0.5 rounded text-[9px] font-bold'>
+                                    v0.1.0 Alpha
+                                </span>
+                            </p>
+                        </div>
+                        <div className='flex items-center gap-2'>
+                            <Button
+                                variant='outline'
+                                size='sm'
+                                onClick={() => {
+                                    setOriginal('');
+                                    setModified('');
+                                }}
+                                className='cursor-pointer'
+                            >
+                                <Trash2 className='h-3.5 w-3.5 mr-2' /> Reset
+                            </Button>
+                            <Button
+                                variant='default'
+                                size='sm'
+                                onClick={copyResult}
+                                className={cn(
+                                    'transition-all duration-200 cursor-pointer',
+                                    copied ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700',
+                                )}
+                            >
+                                {copied ? (
+                                    <>
+                                        <Check className='h-3.5 w-3.5 mr-2 animate-in zoom-in duration-300' /> Copied!
+                                    </>
+                                ) : (
+                                    <>
+                                        <Copy className='h-3.5 w-3.5 mr-2' /> Copy Final
+                                    </>
+                                )}
+                            </Button>
                         </div>
                     </div>
-                    <div className='border-2 border-slate-200 bg-white shadow-xl shadow-slate-200/50 overflow-hidden transition-all focus-within:border-blue-400 focus-within:ring-4 focus-within:ring-blue-50'>
-                        <div
-                            ref={canvasRef}
-                            contentEditable
-                            onFocus={() => setIsCanvasFocused(true)}
-                            onBlur={() => setIsCanvasFocused(false)}
-                            onKeyDown={handleCanvasKeyDown}
-                            onBeforeInput={handleCanvasBeforeInput}
-                            onPaste={handleCanvasPaste}
-                            onCut={handleCanvasCut}
-                            onInput={handleCanvasInput}
-                            suppressContentEditableWarning
-                            className='p-8 min-h-[300px] outline-none font-mono text-sm leading-relaxed whitespace-pre-wrap'
-                        />
+                ) : null}
+
+                {/* Source Fields (Secondary Interface) */}
+                {showOriginal || showModified ? (
+                    <div className={cn(isAnyFieldMaximized ? 'space-y-6' : 'grid md:grid-cols-2 gap-6')}>
+                        {showOriginal ? (
+                            <Textarea
+                                label='Original Source (A)'
+                                value={original}
+                                onChange={(e) => setOriginal(e.target.value)}
+                                isMaximized={maximizedField === 'original'}
+                                onToggleMaximize={() => toggleMaximizedField('original')}
+                            />
+                        ) : null}
+                        {showModified ? (
+                            <Textarea
+                                label='Modified Version (B)'
+                                value={modified}
+                                onChange={(e) => setModified(e.target.value)}
+                                isMaximized={maximizedField === 'modified'}
+                                onToggleMaximize={() => toggleMaximizedField('modified')}
+                            />
+                        ) : null}
                     </div>
-                </div>
+                ) : null}
+
+                {/* The Live Canvas (Primary Interface) */}
+                {showCanvas ? (
+                    <div className='space-y-3'>
+                        <div className='flex items-center justify-between'>
+                            <h2 className='text-sm font-bold flex items-center gap-2'>
+                                <Zap className='h-4 w-4 text-amber-500 fill-amber-500' />
+                                Live Synchronized Canvas
+                            </h2>
+                            <div className='flex items-center gap-2'>
+                                {!isAnyFieldMaximized ? (
+                                    <div className='hidden md:flex gap-4 text-[10px] font-bold uppercase tracking-tighter text-slate-400'>
+                                        <span className='flex items-center gap-1'>
+                                            <span className='w-2 h-2 rounded-full bg-red-400' /> Original A (Read-Only
+                                            from Canvas)
+                                        </span>
+                                        <span className='flex items-center gap-1'>
+                                            <span className='w-2 h-2 rounded-full bg-green-400' /> Edits Modified B
+                                        </span>
+                                        <span className='flex items-center gap-1'>
+                                            <span className='w-2 h-2 rounded-full bg-slate-300' /> All Canvas Edits to
+                                            Modified B
+                                        </span>
+                                    </div>
+                                ) : null}
+                                <Button
+                                    variant='outline'
+                                    size='sm'
+                                    onClick={() => toggleMaximizedField('canvas')}
+                                    className='cursor-pointer'
+                                >
+                                    {maximizedField === 'canvas' ? (
+                                        <>
+                                            <Minimize2 className='h-3.5 w-3.5 mr-2' /> Minimize
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Maximize2 className='h-3.5 w-3.5 mr-2' /> Maximize
+                                        </>
+                                    )}
+                                </Button>
+                            </div>
+                        </div>
+                        <div className='border-2 border-slate-200 bg-white shadow-xl shadow-slate-200/50 overflow-hidden transition-all focus-within:border-blue-400 focus-within:ring-4 focus-within:ring-blue-50'>
+                            <div
+                                ref={canvasRef}
+                                contentEditable
+                                onFocus={() => setIsCanvasFocused(true)}
+                                onBlur={() => setIsCanvasFocused(false)}
+                                onKeyDown={handleCanvasKeyDown}
+                                onBeforeInput={handleCanvasBeforeInput}
+                                onPaste={handleCanvasPaste}
+                                onCut={handleCanvasCut}
+                                onInput={handleCanvasInput}
+                                suppressContentEditableWarning
+                                className={cn(
+                                    'p-8 outline-none font-mono text-sm leading-relaxed whitespace-pre-wrap',
+                                    maximizedField === 'canvas' ? 'min-h-[calc(100vh-12rem)]' : 'min-h-[300px]',
+                                )}
+                            />
+                        </div>
+                    </div>
+                ) : null}
 
                 {/* Footer */}
-                <footer className='pt-12 border-t border-slate-200 flex justify-between items-center text-[10px] text-slate-400 font-bold uppercase tracking-widest'>
-                    <div className='flex items-center gap-4'>
-                        <span>Next.js 15</span>
-                        <span>React 19</span>
-                        <span>Tailwind 4</span>
-                    </div>
-                    <a href='#' className='hover:text-blue-600 transition-colors flex items-center gap-1'>
-                        <Github className='h-3 w-3' /> Source
-                    </a>
-                </footer>
+                {!isAnyFieldMaximized ? (
+                    <footer className='pt-12 border-t border-slate-200 flex justify-between items-center text-[10px] text-slate-400 font-bold uppercase tracking-widest'>
+                        <div className='flex items-center gap-4'>
+                            <span>Next.js 15</span>
+                            <span>React 19</span>
+                            <span>Tailwind 4</span>
+                        </div>
+                        <a href='#' className='hover:text-blue-600 transition-colors flex items-center gap-1'>
+                            <Github className='h-3 w-3' /> Source
+                        </a>
+                    </footer>
+                ) : null}
             </div>
         </div>
     );
