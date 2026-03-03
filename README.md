@@ -4,6 +4,34 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 This project makes use of AI agents and was created using vibe coding.
 
+## Installation
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) 18.18 or newer (Node.js 20 LTS recommended)
+- One package manager: `npm`, `yarn`, `pnpm`, or `bun`
+
+### Setup
+
+1. Clone the repository:
+
+```bash
+git clone https://github.com/micpritz/diffmeister.git
+cd diffmeister
+```
+
+2. Install dependencies:
+
+```bash
+npm install
+# or
+yarn install
+# or
+pnpm install
+# or
+bun install
+```
+
 ## Getting Started
 
 First, run the development server:
